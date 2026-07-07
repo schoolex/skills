@@ -21,6 +21,12 @@
               "type": "enabled",
               "budgetTokens": 8000
             }
+          },
+          "variants": {
+            "low": { "thinking": { "type": "enabled", "budgetTokens": 2000 } },
+            "medium": { "thinking": { "type": "enabled", "budgetTokens": 5000 } },
+            "high": { "thinking": { "type": "enabled", "budgetTokens": 8000 } },
+            "xhigh": { "thinking": { "type": "enabled", "budgetTokens": 16000 } }
           }
         },
         "bedrock.claude-sonnet-4-5": {
@@ -34,6 +40,12 @@
               "type": "enabled",
               "budgetTokens": 16000
             }
+          },
+          "variants": {
+            "low": { "thinking": { "type": "enabled", "budgetTokens": 4000 } },
+            "medium": { "thinking": { "type": "enabled", "budgetTokens": 8000 } },
+            "high": { "thinking": { "type": "enabled", "budgetTokens": 16000 } },
+            "xhigh": { "thinking": { "type": "enabled", "budgetTokens": 32000 } }
           }
         },
         "bedrock.claude-sonnet-4-6": {
@@ -47,6 +59,12 @@
               "type": "enabled",
               "budgetTokens": 16000
             }
+          },
+          "variants": {
+            "low": { "thinking": { "type": "enabled", "budgetTokens": 4000 } },
+            "medium": { "thinking": { "type": "enabled", "budgetTokens": 8000 } },
+            "high": { "thinking": { "type": "enabled", "budgetTokens": 16000 } },
+            "xhigh": { "thinking": { "type": "enabled", "budgetTokens": 32000 } }
           }
         },
         "bedrock.claude-opus-4-6": {
@@ -60,6 +78,12 @@
               "type": "enabled",
               "budgetTokens": 16000
             }
+          },
+          "variants": {
+            "low": { "thinking": { "type": "enabled", "budgetTokens": 4000 } },
+            "medium": { "thinking": { "type": "enabled", "budgetTokens": 8000 } },
+            "high": { "thinking": { "type": "enabled", "budgetTokens": 16000 } },
+            "xhigh": { "thinking": { "type": "enabled", "budgetTokens": 32000 } }
           }
         },
         "bedrock.claude-opus-4-8": {
@@ -75,6 +99,12 @@
             "output_config": {
               "effort": "high"
             }
+          },
+          "variants": {
+            "low": { "thinking": { "type": "enabled", "budgetTokens": 4000 } },
+            "medium": { "thinking": { "type": "enabled", "budgetTokens": 8000 } },
+            "high": { "thinking": { "type": "enabled", "budgetTokens": 16000 } },
+            "xhigh": { "thinking": { "type": "enabled", "budgetTokens": 32000 } }
           }
         }
       },
