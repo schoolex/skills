@@ -1,0 +1,78 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "disabled_providers": [],
+  "provider": {
+    "platform-ai": {
+      "name": "Platform-AI",
+      "npm": "@ai-sdk/openai-compatible",
+      "models": {
+        "bedrock.claude-haiku-4-5": {
+          "name": "claude-haiku-4-5-20251001",
+          "options": {
+            "thinking": {
+              "type": "enabled",
+              "budgetTokens": 8000
+            }
+          }
+        },
+        "bedrock.claude-sonnet-4-5": {
+          "name": "claude-sonnet-4-5",
+          "modalities": {
+            "input": ["text", "image"],
+            "output": ["text"]
+          },
+          "options": {
+            "thinking": {
+              "type": "enabled",
+              "budgetTokens": 16000
+            }
+          }
+        },
+        "bedrock.claude-sonnet-4-6": {
+          "name": "claude-sonnet-4-6",
+          "modalities": {
+            "input": ["text", "image"],
+            "output": ["text"]
+          },
+          "options": {
+            "thinking": {
+              "type": "enabled",
+              "budgetTokens": 16000
+            }
+          }
+        },
+        "bedrock.claude-opus-4-6": {
+          "name": "claude-opus-4-6",
+          "modalities": {
+            "input": ["text", "image"],
+            "output": ["text"]
+          },
+          "options": {
+            "thinking": {
+              "type": "enabled",
+              "budgetTokens": 16000
+            }
+          }
+        },
+        "bedrock.claude-opus-4-8": {
+          "name": "claude-opus-4-8",
+          "modalities": {
+            "input": ["text", "image"],
+            "output": ["text"]
+          },
+          "options": {
+            "thinking": {
+              "type": "adaptive"
+            },
+            "output_config": {
+              "effort": "high"
+            }
+          }
+        }
+      },
+      "options": {
+        "baseURL": "https://api.ai.tech.gov.sg/platform/models"
+      }
+    }
+  }
+}
