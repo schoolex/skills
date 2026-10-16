@@ -1,3 +1,37 @@
+## Branch Setup (run once before any workflow step)
+
+Before reading PR metadata or starting any review, get onto the correct branch so local file reads reflect the actual head state.
+
+1. Fetch the head branch:
+   ```sh
+   gh pr view <pr-url-or-number> --json headRefName --jq '.headRefName'
+   ```
+2. Check whether the working tree is clean:
+   ```sh
+   git status --porcelain
+   ```
+3. **If clean**: checkout and pull fast-forward only:
+   ```sh
+   git checkout <headRefName> && git pull --ff-only
+   ```
+   If `--ff-only` fails (diverged history), stop and tell the user — do not force-merge or rebase on their behalf.
+4. **If dirty**: skip the checkout and pull, note it to the user, and rely on GitHub-fetched content (`gh api` raw file access and the PR diff) rather than local files throughout the review.
+
+## Script Location
+
+All helpers live at one absolute path. Use it verbatim; do not guess alternatives (`~/.agents/...`, `~/.claude/...`, `pr-review-initial/..`, `~/.config/opencode/skills/pr-review/...` all fail or are symlink detours):
+
+```sh
+PRR=~/.config/opencode/skills/skills/pr-review/scripts
+python3 $PRR/review_threads.py --repo {owner}/{repo} --pr {id} --format json
+```
+
+## Project Facts (dsaidgovsg/tcs-ui, dsaidgovsg/tcs-core)
+
+- tcs-ui tests are **Playwright only** (`packages/core-app/playwright/**`). Cypress is gone; never suggest Cypress tests. There are no frontend unit tests — ask for Playwright coverage instead.
+- tcs-ui and tcs-core have two remotes: `origin` (GitHub) and `gitlab`. Pushes go to both.
+- `notebooks/**` and migration scripts are runbooks (see runbook mode in `pr-review-initial`); inputs are author-keyed, so f-string query injection is not a finding.
+
 ## Shared Goal
 
 Write reviews the author can act on. Be concise, specific, and focused on what needs to change and why.
@@ -10,17 +44,30 @@ Reviewer identity has a single source of truth, resolved (in order) from:
 2. `PR_REVIEW_BOT_LOGIN` — the bot's GitHub login; the signature becomes `[Reviewed by <login>'s bot]`.
 3. The default login `schoolex` when neither is set.
 
-The same login also gates thread resolution in follow-up reviews (only resolve threads you opened). To check the active value:
-
-```sh
-python3 -c "import sys; sys.path.insert(0, '$HOME/.config/opencode/skills/pr-review/scripts'); import review_common as c; print(c.DEFAULT_BOT_LOGIN); print(c.DEFAULT_SIGNOFF)"
-```
+The same login also gates thread resolution in follow-up reviews (only resolve threads you opened). Do not probe the value with a Python one-liner — just use `${PR_REVIEW_BOT_LOGIN:-schoolex}`.
 
 ## Bot Signature
 
 - For every pull request comment or review body the bot writes while using these skills, append the resolved signature (see Bot Identity) on its own line at the end. `submit_review.py` does this automatically; only append it by hand when writing comments outside the helper scripts.
 - Do not prefix the signature with a bullet, numbering, quote marker, or any other Markdown decoration.
 - Do not add this signature to commit messages, branch names, or PR titles unless explicitly requested.
+
+## Posting Gate (applies to every review skill)
+
+Nothing reaches GitHub until the user picks what to post. Sessions show the user curates almost every review ("just post 1 and 4", "ignore the security finding", "approve, but leave those as comments").
+
+1. Present findings in chat as a **numbered** list: `#. [severity] [category] path:line — title` plus a one-line problem/fix. End with a recommendation: `Recommend: APPROVE` when nothing is blocking, otherwise `Recommend: COMMENT`.
+2. Wait for the user's choice, e.g. `post all`, `post 1,3`, `approve`, `approve + post 2`, `internal` (post nothing). A message in the original request such as "just approve if non-blocking" or "post it" counts as pre-approval — apply it without asking again.
+3. Submit **exactly one** review per run via `submit_review.py`. Never post test, probe, or placeholder reviews/comments. If submission fails, fix and retry the same payload; do not post partial reviews.
+4. If the user is the PR author (`gh api user --jq .login` equals the PR author), GitHub forbids APPROVE/REQUEST_CHANGES — default to `internal` and never submit a review unless asked.
+
+Leniency: when the user says "be lenient", "no obvious bugs", or the PR is a small/mechanical change, report only blocking/notable findings and recommend APPROVE if none are blocking.
+
+## Anchoring Inline Comments
+
+- Take `line` directly from the RIGHT-side numbers in the patch hunk (`@@ -a,b +c,d @@` → the first `+` line is `c`). Only lines inside a hunk are commentable.
+- Prefer `diff_position.py ... --new-line N --format json` to confirm an anchor. Needle matching is brittle (whitespace, partial lines); if a needle misses, switch to `--new-line` instead of retrying needles.
+- If the target line is outside the diff, either anchor to the nearest changed line in the same hunk and name the real line in the body, or use a file-level comment (`"subject_type": "file"`).
 
 ## Shared Posture
 
@@ -69,7 +116,7 @@ gh api --paginate "repos/{owner}/{repo}/issues/{id}/comments?per_page=100"
 Read review threads with resolved and outdated state:
 
 ```sh
-python ~/.config/opencode/skills/pr-review/scripts/review_threads.py \
+python3 ~/.config/opencode/skills/skills/pr-review/scripts/review_threads.py \
   --repo {owner}/{repo} \
   --pr {id}
 ```
@@ -77,7 +124,7 @@ python ~/.config/opencode/skills/pr-review/scripts/review_threads.py \
 Resolve stable review anchors from the raw diff:
 
 ```sh
-python ~/.config/opencode/skills/pr-review/scripts/diff_position.py \
+python3 ~/.config/opencode/skills/skills/pr-review/scripts/diff_position.py \
   <pr-url-or-number> \
   src/service.py \
   --new-line 128 \
@@ -87,7 +134,7 @@ python ~/.config/opencode/skills/pr-review/scripts/diff_position.py \
 Legacy position lookup by exact text:
 
 ```sh
-python ~/.config/opencode/skills/pr-review/scripts/diff_position.py \
+python3 ~/.config/opencode/skills/skills/pr-review/scripts/diff_position.py \
   <pr-url-or-number> \
   src/service.py \
   'result = expensive_call()'
@@ -96,7 +143,7 @@ python ~/.config/opencode/skills/pr-review/scripts/diff_position.py \
 Context view for ambiguous matches:
 
 ```sh
-python ~/.config/opencode/skills/pr-review/scripts/diff_position.py \
+python3 ~/.config/opencode/skills/skills/pr-review/scripts/diff_position.py \
   <pr-url-or-number> \
   src/service.py \
   --match-mode contains \
@@ -109,7 +156,7 @@ python ~/.config/opencode/skills/pr-review/scripts/diff_position.py \
 Submit a consolidated review:
 
 ```sh
-python ~/.config/opencode/skills/pr-review/scripts/submit_review.py \
+python3 ~/.config/opencode/skills/skills/pr-review/scripts/submit_review.py \
   --repo {owner}/{repo} \
   --pr {id} \
   --validate \
@@ -120,7 +167,7 @@ python ~/.config/opencode/skills/pr-review/scripts/submit_review.py \
 Validate anchors without submitting:
 
 ```sh
-python ~/.config/opencode/skills/pr-review/scripts/submit_review.py \
+python3 ~/.config/opencode/skills/skills/pr-review/scripts/submit_review.py \
   --repo {owner}/{repo} \
   --pr {id} \
   --validate-only \
@@ -131,7 +178,7 @@ python ~/.config/opencode/skills/pr-review/scripts/submit_review.py \
 Submit an approval in a follow-up review:
 
 ```sh
-python ~/.config/opencode/skills/pr-review/scripts/submit_review.py \
+python3 ~/.config/opencode/skills/skills/pr-review/scripts/submit_review.py \
   --repo {owner}/{repo} \
   --pr {id} \
   --event APPROVE \
@@ -141,7 +188,7 @@ python ~/.config/opencode/skills/pr-review/scripts/submit_review.py \
 Post threaded replies without creating a new review:
 
 ```sh
-python ~/.config/opencode/skills/pr-review/scripts/submit_review.py \
+python3 ~/.config/opencode/skills/skills/pr-review/scripts/submit_review.py \
   --repo {owner}/{repo} \
   --pr {id} \
   --replies-only \
@@ -212,7 +259,7 @@ Flag structural regressions when the diff:
 - Moves code around without reducing the number of concepts a reader must hold.
 - Adds wrappers, pass-through helpers, casts, `any`/`unknown`, or optional params that obscure the real invariant.
 - Puts logic in the wrong layer instead of the canonical package, service, hook, component, or helper.
-- Duplicates behavior that already has a canonical helper.
+- Duplicates behavior that already has a canonical helper. (Duplication across exactly two call sites is not automatically blocking — flag it only when the canonical helper already exists and the copy is non-trivial, or when the pattern appears three or more times.)
 - Pushes a file from below 1000 lines to above 1000 lines without a strong reason.
 - Serializes independent async work or performs related updates non-atomically when the cleaner structure is obvious.
 
@@ -315,25 +362,29 @@ Path-aware checks:
 
 ## Safe GH CLI Patterns
 
+- Fetch file content at a ref with `python3 $PRR/fetch_file.py --repo {owner}/{repo} --ref {headSha} path/a.ts path/b.ts`. If you must call `gh api` directly, **quote the endpoint** — zsh treats an unquoted `?ref=` as a glob and fails with `no matches found`.
 - Prefer `gh api --input /tmp/payload.json` for nested payloads. It is more reliable than many `-F` flags.
 - Quote endpoints that contain `{owner}` or `{repo}` placeholders in shells that treat braces specially.
 - Do not use `gh api -f "$(cat review.json)"` for JSON bodies; use `--input review.json`.
 - Use `--paginate` for comment history to avoid silently missing older threads.
 - Keep body text in files rather than inline shell strings when it includes backticks, quotes, braces, or Markdown fences.
-- Prefer the helpers in `skills/pr-review/scripts/review_common.py` and `skills/pr-review/scripts/submit_review.py` over hand-rolled JSON submission.
+- Prefer the helpers in `$PRR/review_common.py` and `$PRR/submit_review.py` over hand-rolled JSON submission.
 
 ## Helper Scripts
 
-- `~/.config/opencode/skills/pr-review/scripts/diff_position.py`
+- `~/.config/opencode/skills/skills/pr-review/scripts/diff_position.py`
   - Parses `gh pr diff --patch` safely.
   - Resolves `position`, `line`, `side`, `old_line`, and `new_line`.
   - Supports exact, contains, and regex matching plus contextual output.
-- `~/.config/opencode/skills/pr-review/scripts/review_threads.py`
+- `~/.config/opencode/skills/skills/pr-review/scripts/review_threads.py`
   - Uses GitHub GraphQL to fetch review threads with resolved and outdated state.
   - Produces compact summaries or raw JSON for follow-up review decisions.
-- `~/.config/opencode/skills/pr-review/scripts/review_common.py`
+- `~/.config/opencode/skills/skills/pr-review/scripts/review_common.py`
   - Centralizes sign-off handling, comment normalization, JSON file writing, and `gh api --input` submission helpers.
-- `~/.config/opencode/skills/pr-review/scripts/submit_review.py`
+- `~/.config/opencode/skills/skills/pr-review/scripts/fetch_file.py`
+  - Prints raw file content at a ref for one or more paths, with safe URL quoting.
+- `~/.config/opencode/skills/skills/pr-review/scripts/submit_review.py`
+  - Accepts and strips reviewer metadata keys (`severity`, `category`, `id`, `title`), and defaults `side` to `RIGHT` when only `line` is given.
   - Builds normalized review payloads and threaded replies from JSON.
   - Auto-fetches the PR head SHA unless disabled.
   - Validates safer comment shapes, optional PR diff anchors, and thread replies.
@@ -342,11 +393,5 @@ Path-aware checks:
 ## Validation
 
 ```sh
-python3 -m unittest skills/pr-review/scripts/test_review_helpers.py
-python3 -m py_compile \
-  skills/pr-review/scripts/review_common.py \
-  skills/pr-review/scripts/diff_position.py \
-  skills/pr-review/scripts/review_threads.py \
-  skills/pr-review/scripts/submit_review.py \
-  skills/pr-review/scripts/test_review_helpers.py
+cd ~/.config/opencode/skills/skills/pr-review/scripts && python3 -m unittest test_review_helpers
 ```

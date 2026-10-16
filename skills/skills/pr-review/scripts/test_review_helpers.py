@@ -251,6 +251,18 @@ class SubmitReviewTests(unittest.TestCase):
 
 
 class ReviewThreadTests(unittest.TestCase):
+    def test_normalize_review_comment_drops_reviewer_metadata(self) -> None:
+        comment = review_common.normalize_review_comment(
+            {"severity": "blocking", "category": "correctness", "path": "src/foo.py", "line": 12, "body": "x"},
+            "[sig]",
+            1,
+        )
+        self.assertEqual(comment, {"path": "src/foo.py", "body": "x\n\n[sig]", "line": 12, "side": "RIGHT"})
+
+    def test_normalize_reply_drops_reviewer_metadata(self) -> None:
+        reply = review_common.normalize_reply({"severity": "nit", "in_reply_to": 5, "body": "ok"}, "", 1)
+        self.assertEqual(reply, {"in_reply_to": 5, "body": "ok"})
+
     def test_parse_repo_accepts_owner_repo(self) -> None:
         self.assertEqual(review_threads.parse_repo("owner/repo"), ("owner", "repo"))
 

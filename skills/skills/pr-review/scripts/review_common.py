@@ -68,7 +68,15 @@ def contains_suggestion(body: str) -> bool:
     return SUGGESTION_FENCE in body
 
 
+# Reviewer-agent bookkeeping keys. Accepted in comment files so findings can be
+# passed straight through, but never sent to GitHub.
+METADATA_KEYS = {"severity", "category", "id", "title"}
+
+
 def normalize_review_comment(comment: dict, signoff: str, index: int) -> dict[str, object]:
+    comment = {k: v for k, v in comment.items() if k not in METADATA_KEYS}
+    if "line" in comment and "side" not in comment and "position" not in comment:
+        comment["side"] = "RIGHT"
     allowed = {
         "body",
         "line",
@@ -161,6 +169,7 @@ def normalize_review_comment(comment: dict, signoff: str, index: int) -> dict[st
 
 
 def normalize_reply(comment: dict, signoff: str, index: int) -> dict[str, object]:
+    comment = {k: v for k, v in comment.items() if k not in METADATA_KEYS}
     allowed = {"body", "in_reply_to"}
     unknown = set(comment) - allowed
     if unknown:

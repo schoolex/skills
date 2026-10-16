@@ -1,38 +1,58 @@
 ---
 name: pr-review-follow-up
-description: Give a follow-up review on a pull request after the author has responded or pushed updates. Use when revisiting earlier findings, closing review threads, or deciding whether the PR is now ready to approve.
+description: Give a follow-up review on a pull request after the author has responded or pushed updates. Use when revisiting earlier findings, closing review threads, checking "is it approved / what's blocking", or deciding whether the PR is now ready to approve.
 ---
 
-Use this skill after an earlier review already happened and the author has replied or pushed follow-up commits.
+Use this skill after an earlier review, when the author has replied or pushed follow-up commits.
+
+Read `~/.config/opencode/skills/skills/pr-review/REFERENCE.md` first, in particular the Posting Gate, Anchoring and Project Facts sections. Scripts:
+
+```sh
+PRR=~/.config/opencode/skills/skills/pr-review/scripts
+```
+
+Use that path verbatim. Our login is `${PR_REVIEW_BOT_LOGIN:-schoolex}`. Don't probe for it with Python.
 
 ## Goal
 
-Verify what is still outstanding, avoid repeating closed points, and approve when the PR is ready.
+Work out what is still outstanding, don't repeat points that are already closed, and approve when the PR is ready.
 
 ## Workflow
 
-1. Read `../pr-review/REFERENCE.md`, then read prior reviews, inline threads, issue comments, and the latest diff before replying.
-2. Separate findings into: fixed, intentionally deferred, and still blocking this PR.
-3. Prefer replying in the existing thread with `in_reply_to` when acknowledging resolution or scope changes.
-4. If the author said an issue will be tracked separately, and that split is reasonable, treat that thread as non-blocking and move on.
-5. Only leave fresh comments for issues that still need action in this PR.
-6. For each thread that is confirmed fixed, resolve it individually via GraphQL — but **only resolve threads you opened**. Determine your own login from the Bot Identity source in `../pr-review/REFERENCE.md` (it resolves to `schoolex` by default), then resolve a thread only when its first comment's author matches that login. Never resolve threads opened by other reviewers.
+1. Gather state in one batch:
    ```sh
-   gh api graphql -f query='mutation { resolveReviewThread(input: {threadId: "THREAD_ID"}) { thread { isResolved } } }'
+   N=<pr>; REPO=<owner/repo>
+   gh pr view $N --repo $REPO --json number,title,author,headRefOid,reviews,commits,url,state,reviewDecision
+   python3 $PRR/review_threads.py --repo $REPO --pr $N --format json > /tmp/threads-$N.json
+   gh pr diff $N --repo $REPO --patch > /tmp/pr-$N.patch
    ```
-   Thread IDs come from `review_threads.py --format json` (the `id` field; check `comments.nodes[0].author.login` to confirm ownership). Resolve threads as you triage them — do not batch all resolutions to the end.
-7. If no other blocking issues remain, submit an `APPROVE` review.
+   `review_threads.py --format json` writes pure JSON to stdout. Load it with `json.load(open(...))`, and never slice it at `[`.
+   Find the commits added since our last review: compare the `submittedAt` of our latest review with the commit dates. Focus on what those commits change.
+2. Sort every thread we opened into one of three groups:
+   - **fixed**
+   - **deferred**: the author will track it separately and that split is reasonable, so it's non-blocking
+   - **still open**
+
+   Threads opened by other reviewers are out of scope. You may mention them, but never resolve them.
+3. Show the user a short status table in chat (thread, status, one-line evidence) with a recommendation: `Recommend: APPROVE` if nothing blocking is left, otherwise `Recommend: COMMENT`. Then follow the Posting Gate. If the request was pre-approved ("approve if non-blocking", "just approve"), carry on without waiting.
+4. Once the user has decided, act in this order:
+   - Resolve each **fixed** thread that we opened (the first comment's author equals our login):
+     ```sh
+     gh api graphql -f query='mutation { resolveReviewThread(input: {threadId: "THREAD_ID"}) { thread { isResolved } } }'
+     ```
+     If the user says "let the reviewer resolve them", skip this step.
+   - Post the thread replies the user asked for in one call, with no new review:
+     ```sh
+     python3 $PRR/submit_review.py --repo $REPO --pr $N --replies-only --comments-file /tmp/replies-$N.json
+     # [{"in_reply_to": <databaseId of the thread's first comment>, "body": "..."}]
+     ```
+   - Submit **one** review at most: `--event APPROVE` (with any new comments the user approved) or `--event COMMENT`. Never submit a review only to say "acknowledged". Thread replies cover that.
+5. When nothing is left to post (the user is the author, or `internal` was requested), stop after the status table.
 
 ## Output Rules
 
-- Be polite and empathetic. Acknowledge the author's effort when closing out findings or approving.
-- Keep the follow-up body short and explicit about the remaining status.
-- Do not restate resolved concerns as open findings.
-- Append the required bot signature to every review body and comment.
-- Use `COMMENT` if discussion is still open; use `APPROVE` when the PR is ready.
-
-## Tools
-
-The shared commands, helper scripts, comment JSON shapes, formatting rules, and validation commands live in `../pr-review/REFERENCE.md`. Read it before submitting a follow-up. Beyond those, this mode relies on `review_threads.py --format json` for thread state and ownership, and the `resolveReviewThread` GraphQL mutation above.
-
-If the PR touches React/MUI frontend code (`.tsx` components, `sx` props, `styled()` calls, inline `style` props), also read `../pr-review/FRONTEND.md` and check whether any hardcoded magic value findings from the initial review are resolved or still open.
+- Be polite. Acknowledge the author's work when closing findings.
+- Don't present resolved concerns as open findings.
+- Keep the body short and state the remaining status explicitly.
+- Only raise new comments for issues that still need action in this PR.
+- If the PR touches React/MUI, check whether any hard-coded magic-value findings are still open, using `../pr-review/FRONTEND.md`.
