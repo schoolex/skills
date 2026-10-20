@@ -1,0 +1,3 @@
+interface:
+  display_name: "Prototype Explorer"
+  short_description: "Turn a static HTML artifact into an interactive explorer"
